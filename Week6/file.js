@@ -1,3 +1,4 @@
+var followers, accOrg, requestFollowersArray, requestOrgsArray;
 var searchBTN = document.getElementById("searchBTN");
 searchBTN.addEventListener("click", getInputField);
 makeRequest("https://api.github.com/users/yasershomaf", showUserInfo);//This line loads my profile
@@ -26,7 +27,7 @@ function makeRequest(requestURL, callBackFunction) {
             if (resultJson.hasOwnProperty("message"))
                 callBackFunction(false);
             else
-                callBackFunction(true, resultJson)
+                callBackFunction(true, resultJson);
         }
     }
 }
@@ -55,6 +56,18 @@ function showUserInfo(requestOK, requestJ) {
         document.getElementById("leftSection").appendChild(publicRepos);
         userName.addEventListener("click", showOtherInfo);
         publicRepos.addEventListener("click",searchForRepos);
+        followers = document.createElement("h3");
+        followers.innerHTML = "Followers :" + requestJ.followers;
+        document.getElementById("leftSection").appendChild(followers);
+        //This function trys to send followers request.
+        if (requestJ.followers > 0) {
+            followers.setAttribute("title", "Show all the followers of " + requestJ.login);
+            followers.setAttribute("class", "fingerPointer");
+            followers.addEventListener("click", showFollowersList);
+            followers.style.display = "none";
+            searchBTN.style.display = "none";
+            makeRequest("https://api.github.com/users/" + requestJ.login + "/followers", getFollowersList);
+        }
         searchForRepos();//This line triggers the onClick function of the recently created "h3" element which holds the number of public repositories.
     }
     else
@@ -63,6 +76,7 @@ function showUserInfo(requestOK, requestJ) {
     function showOtherInfo() {
         userName.style.color = "#ffffff";
         publicRepos.style.color = "#000000";
+        followers.style.color = "#000000";
         document.getElementById("centerSection").innerHTML = "";
         var tempString = "";
         document.getElementById("aside").innerHTML = "";
@@ -78,10 +92,47 @@ function showUserInfo(requestOK, requestJ) {
     function searchForRepos() {
         if (requestJ.public_repos > 0) {
             userName.style.color = "#000000";
+            followers.style.color = "#000000";
             publicRepos.style.color = "#ffffff";
             document.getElementById("centerSection").innerHTML = "";
             document.getElementById("aside").innerHTML = "";
             makeRequest("https://api.github.com/users/" + requestJ.login + "/repos", showReposList);
+        }
+    }
+    function showFollowersList() {
+        userName.style.color = "#000000";
+        publicRepos.style.color = "#000000";
+        followers.style.color = "#ffffff";
+        document.getElementById("centerSection").innerHTML = "";
+        document.getElementById("aside").innerHTML = "";
+        var followerLi, followersUList;
+        var followersOList = document.createElement("ol");
+        document.getElementById("centerSection").appendChild(followersOList);
+        for (var i=0; i<requestFollowersArray.length; i++) {
+            followerLi = document.createElement("li");
+            followersOList.appendChild(followerLi);
+            followerLi.innerHTML = requestFollowersArray[i].followerName;
+            followersUList = document.createElement("ul");
+            followerLi.appendChild(followersUList);
+            for (var j=0; j<requestFollowersArray[i].followerOrgs.length; j++) {
+                followerLi = document.createElement("li");
+                followersUList.appendChild(followerLi);
+                followerLi.innerHTML = requestFollowersArray[i].followerOrgs[j];
+            }
+        }
+        followersOList = document.createElement("ol");
+        document.getElementById("aside").appendChild(followersOList);
+        for (var i=0; i<requestOrgsArray.length; i++) {
+            followerLi = document.createElement("li");
+            followersOList.appendChild(followerLi);
+            followerLi.innerHTML = requestOrgsArray[i].followerOrgs;
+            followersUList = document.createElement("ul");
+            followerLi.appendChild(followersUList);
+            for (var j=0; j<requestOrgsArray[i].followerName.length; j++) {
+                followerLi = document.createElement("li");
+                followersUList.appendChild(followerLi);
+                followerLi.innerHTML = requestOrgsArray[i].followerName[j];
+            }
         }
     }
 }
@@ -91,13 +142,13 @@ function showReposList(requestOK, requestReposJ) {
     if (requestOK) {
         var reposList = document.createElement("ul");
         document.getElementById("centerSection").appendChild(reposList);
-        var repoItems = [];
-        for (var i=0; i<requestReposJ.length; i++) {
-            repoItems[i] = document.createElement("li");
-            reposList.appendChild(repoItems[i]);
-            repoItems[i].innerHTML = requestReposJ[i].name;
-            repoItems[i].addEventListener("mouseover", showRepoInfo);
-        }
+        var repoItems = requestReposJ.map(function(repo) {
+            var repoItem = document.createElement("li");
+            reposList.appendChild(repoItem);
+            repoItem.innerHTML = repo.name;
+            repoItem.addEventListener("mouseover", showRepoInfo);
+            return repoItem;
+        });
         //This code triggers the onClick function of the first public repository to give the events that are related to it.
         if ("createEvent" in document) {
             var evt = document.createEvent("HTMLEvents");
@@ -109,19 +160,6 @@ function showReposList(requestOK, requestReposJ) {
     }
     else
         document.getElementById("centerSection").innerHTML = "Couldn't find the requested repositories!";
-
-    //I commented this function out so I can override it using the next function (Point 5)
-    /*function showRepoInfo(event) {
-        for (var i=0; i<repoItems.length; i++)
-            repoItems[i].style.color = "#000000";
-        event.target.style.color = "#ffffff";
-        document.getElementById("aside").innerHTML = "";
-        var repoInfoPar = document.createElement("p");
-        repoInfoPar.innerHTML = "Created at: " + requestReposJ[repoItems.indexOf(event.target)].created_at + "<br>Open issues: " + requestReposJ[repoItems.indexOf(event.target)].open_issues;
-        document.getElementById("aside").appendChild(repoInfoPar);
-    }*/
-
-    //This function shows all of the repository events when hovering over it.
     function showRepoInfo(event) {
         for (var i=0; i<repoItems.length; i++)
             repoItems[i].style.color = "#000000";
@@ -154,4 +192,60 @@ function showEventsList(requestOK, requestEventsJ) {
     }
     else
         document.getElementById("aside").innerHTML = "There are no events for the selected repository!";
+}
+
+//This is the callBack function that responses to the results of the followers request and then sends organizations request for each follower.
+function getFollowersList(requestOK, requestFollowersJ) {
+    if (requestOK) {
+        requestFollowersArray = requestFollowersJ.map(function(follower) {
+            return {"followerName" : follower.login, "followerOrgs" : []};
+        });
+        accOrg = 0;
+        requestOrgsArray = [];
+        makeRequest("https://api.github.com/users/" + requestFollowersArray[accOrg].followerName + "/orgs", getFollowersOrgs);
+    }
+    else
+        document.getElementById("centerSection").innerHTML = "Couldn't find the requested followers!";
+}
+
+//This is the callBack function that responses to the results of the organizations request and then sort the results according to 2 categories (organization names and follower names).
+function getFollowersOrgs(requestOK, requestOrgsJ) {
+    if (requestOK) {
+        if (requestOrgsJ.length == 0) {
+            requestFollowersArray[accOrg].followerOrgs[0] = "No Organization";
+        }
+        else {
+            requestFollowersArray[accOrg].followerOrgs = requestOrgsJ.map(function(organization) {
+                return organization.login;
+            });
+        }
+        accOrg++;
+        if (accOrg == requestFollowersArray.length) {
+            for (var i=0; i<requestFollowersArray.length; i++) {
+                for (var j=0; j<requestFollowersArray[i].followerOrgs.length; j++) {
+                    var index = requestOrgsArray.length;
+                    if (requestOrgsArray.length > 0) {
+                        for (var k=0; k<requestOrgsArray.length; k++) {
+                            if (requestOrgsArray[k] == requestFollowersArray[i].followerOrgs[j]) {
+                                index = k;
+                                break;
+                            }
+                        }
+                    }
+                    if (index == requestOrgsArray.length) {
+                        requestOrgsArray[index] = {"followerOrgs" : "", "followerName" : []};
+                    }
+                    requestOrgsArray[index].followerOrgs = requestFollowersArray[i].followerOrgs[j];
+                    requestOrgsArray[index].followerName.push(requestFollowersArray[i].followerName);
+                }
+            }
+            searchBTN.style.display = "inline";
+            followers.style.display = "block";
+        }
+        else {
+            makeRequest("https://api.github.com/users/" + requestFollowersArray[accOrg].followerName + "/orgs", getFollowersOrgs);
+        }
+    }
+    else
+        document.getElementById("centerSection").innerHTML = "Couldn't find the requested organizations!";
 }
